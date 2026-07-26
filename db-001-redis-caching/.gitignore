@@ -1,0 +1,9 @@
+# Dependencies
+node_modules/
+
+# Environment Variables
+.env
+
+# Large Data Files
+*.csv
+sales_data_1m.csv
