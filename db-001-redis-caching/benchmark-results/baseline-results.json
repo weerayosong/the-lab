@@ -1,0 +1,82 @@
+[
+  {
+    "name": "Monthly Sales Report",
+    "url": "http://localhost:3000/api/sales/direct/2023/6",
+    "connections": 10,
+    "timestamp": "2026-07-27T08:25:25.684Z",
+    "metrics": {
+      "total_requests": 4072,
+      "requests_per_second": 135.74,
+      "latency_avg_ms": 73.06,
+      "latency_p99_ms": 208,
+      "latency_max_ms": 513,
+      "errors": 0,
+      "timeouts": 0,
+      "throughput_bytes": 65853.87
+    }
+  },
+  {
+    "name": "Top Products by Month",
+    "url": "http://localhost:3000/api/sales/direct/top-products/2023/6",
+    "connections": 10,
+    "timestamp": "2026-07-27T08:25:55.865Z",
+    "metrics": {
+      "total_requests": 4594,
+      "requests_per_second": 153.14,
+      "latency_avg_ms": 65.02,
+      "latency_p99_ms": 179,
+      "latency_max_ms": 371,
+      "errors": 0,
+      "timeouts": 0,
+      "throughput_bytes": 60960.54
+    }
+  },
+  {
+    "name": "Date Range Query (30 days)",
+    "url": "http://localhost:3000/api/sales/direct/range?start_date=2023-06-01&end_date=2023-06-30",
+    "connections": 5,
+    "timestamp": "2026-07-27T08:26:25.925Z",
+    "metrics": {
+      "total_requests": 4289,
+      "requests_per_second": 142.97,
+      "latency_avg_ms": 34.48,
+      "latency_p99_ms": 94,
+      "latency_max_ms": 169,
+      "errors": 0,
+      "timeouts": 0,
+      "throughput_bytes": 63619.74
+    }
+  },
+  {
+    "name": "Overall Statistics",
+    "url": "http://localhost:3000/api/sales/direct/stats",
+    "connections": 3,
+    "timestamp": "2026-07-27T08:26:55.965Z",
+    "metrics": {
+      "total_requests": 363,
+      "requests_per_second": 12.1,
+      "latency_avg_ms": 246.11,
+      "latency_p99_ms": 304,
+      "latency_max_ms": 329,
+      "errors": 0,
+      "timeouts": 0,
+      "throughput_bytes": 8313.34
+    }
+  },
+  {
+    "name": "Single Day Query",
+    "url": "http://localhost:3000/api/sales/direct/range?start_date=2023-06-15&end_date=2023-06-15",
+    "connections": 20,
+    "timestamp": "2026-07-27T08:27:26.012Z",
+    "metrics": {
+      "total_requests": 5900,
+      "requests_per_second": 196.67,
+      "latency_avg_ms": 101.15,
+      "latency_p99_ms": 248,
+      "latency_max_ms": 520,
+      "errors": 0,
+      "timeouts": 0,
+      "throughput_bytes": 87586.14
+    }
+  }
+]
