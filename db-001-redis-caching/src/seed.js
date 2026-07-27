@@ -1,6 +1,9 @@
-const { Client } = require("pg");
-const fs = require("fs");
-const csv = require("csv-parser");
+// src/seed.js
+import pg from "pg";
+import fs from "fs";
+import csv from "csv-parser";
+
+const { Client } = pg;
 
 // ดึงค่า Config จาก Environment Variables
 const client = new Client({
