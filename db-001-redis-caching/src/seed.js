@@ -1,4 +1,3 @@
-// src/seed.js
 import pg from "pg";
 import fs from "fs";
 import csv from "csv-parser";

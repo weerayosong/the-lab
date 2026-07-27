@@ -5,25 +5,28 @@
   "main": "src/app.js",
   "scripts": {
     "start": "node --env-file=.env src/app.js",
+    "start:cached": "node --env-file=.env src/app-cached.js",
     "dev": "node --env-file=.env --watch src/app.js",
+    "dev:cached": "node --env-file=.env --watch src/app-cached.js",
     "seed": "node --env-file=.env src/seed.js",
-    "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f"
+    "test:load": "node --env-file=.env src/load-test.js",
+    "benchmark": "node --env-file=.env src/benchmark.js",
+    "benchmark:all": "npm run benchmark && echo '\n⚠️  Now run: npm run start:cached (in another terminal) and then: npm run benchmark:cached'",
+    "benchmark:cached": "node --env-file=.env src/benchmark-cached.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "compression": "^1.7.4",
     "csv-parser": "^3.2.1",
     "express": "^5.2.1",
-    "pg": "^8.22.0",
-    "redis": "^6.1.0",
     "morgan": "^1.10.0",
-    "compression": "^1.7.4"
+    "pg": "^8.22.0",
+    "redis": "^6.1.0"
   },
   "devDependencies": {
-    "autocannon": "^7.14.0"
+    "autocannon": "^7.15.0"
   }
 }

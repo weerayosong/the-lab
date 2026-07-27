@@ -1,0 +1,62 @@
+[
+  {
+    "name": "Cached Monthly Report",
+    "url": "http://localhost:3001/api/sales/cached/2023/6",
+    "connections": 50,
+    "timestamp": "2026-07-27T07:36:50.434Z",
+    "metrics": {
+      "total_requests": 146028,
+      "requests_per_second": 4868.5,
+      "latency_avg_ms": 9.78,
+      "latency_p99_ms": 15,
+      "latency_max_ms": 189,
+      "errors": 0,
+      "timeouts": 0
+    }
+  },
+  {
+    "name": "Cached Top Products",
+    "url": "http://localhost:3001/api/sales/cached/top-products/2023/6",
+    "connections": 50,
+    "timestamp": "2026-07-27T07:37:20.451Z",
+    "metrics": {
+      "total_requests": 147213,
+      "requests_per_second": 4907.87,
+      "latency_avg_ms": 9.7,
+      "latency_p99_ms": 14,
+      "latency_max_ms": 20,
+      "errors": 0,
+      "timeouts": 0
+    }
+  },
+  {
+    "name": "Cached Range Query",
+    "url": "http://localhost:3001/api/sales/cached/range?start_date=2023-06-01&end_date=2023-06-30",
+    "connections": 30,
+    "timestamp": "2026-07-27T07:37:50.459Z",
+    "metrics": {
+      "total_requests": 141630,
+      "requests_per_second": 4721.34,
+      "latency_avg_ms": 5.8,
+      "latency_p99_ms": 10,
+      "latency_max_ms": 13,
+      "errors": 0,
+      "timeouts": 0
+    }
+  },
+  {
+    "name": "Cached Stats",
+    "url": "http://localhost:3001/api/sales/cached/stats",
+    "connections": 50,
+    "timestamp": "2026-07-27T07:38:20.473Z",
+    "metrics": {
+      "total_requests": 142517,
+      "requests_per_second": 4751.3,
+      "latency_avg_ms": 10.06,
+      "latency_p99_ms": 15,
+      "latency_max_ms": 241,
+      "errors": 0,
+      "timeouts": 0
+    }
+  }
+]

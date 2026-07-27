@@ -6,11 +6,7 @@ import { createClient } from "redis";
 
 const { Pool } = pkg;
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// ============================================
-// DATABASE CONNECTIONS
-// ============================================
+const PORT = process.env.CACHED_PORT || 3001;
 
 // PostgreSQL Connection Pool
 const pool = new Pool({
@@ -32,24 +28,33 @@ const redisClient = createClient({
   },
 });
 
-redisClient.on("error", (err) => {
-  console.warn("⚠️  Redis connection error:", err.message);
-});
+redisClient.on("error", (err) => console.warn("⚠️  Redis Error:", err.message));
+redisClient.on("connect", () => console.log("✅ Redis Connected"));
 
-redisClient.on("connect", () => {
-  console.log("✅ Redis connected successfully");
-});
+// Cache configuration
+const CACHE_TTL = 3600; // 1 hour default TTL
+const CACHE_PREFIX = "sales:";
 
-const connectRedis = async () => {
+// Cache helper functions
+async function getCache(key) {
   try {
-    await redisClient.connect();
+    if (!redisClient.isReady) return null;
+    const data = await redisClient.get(key);
+    return data ? JSON.parse(data) : null;
   } catch (error) {
-    console.warn(
-      "⚠️  Cannot connect to Redis, caching disabled:",
-      error.message,
-    );
+    console.warn("Cache get error:", error.message);
+    return null;
   }
-};
+}
+
+async function setCache(key, data, ttl = CACHE_TTL) {
+  try {
+    if (!redisClient.isReady) return;
+    await redisClient.setEx(key, ttl, JSON.stringify(data));
+  } catch (error) {
+    console.warn("Cache set error:", error.message);
+  }
+}
 
 // ============================================
 // MIDDLEWARE
@@ -59,7 +64,7 @@ app.use(compression());
 app.use(express.json());
 
 morgan.token("cache-status", (req, res) => {
-  return res.locals.cacheHit ? "CACHE_HIT" : "DB_QUERY";
+  return res.locals.cacheHit ? "🎯 CACHE_HIT" : "💾 DB_QUERY";
 });
 
 morgan.token("query-time", (req, res) => {
@@ -77,53 +82,53 @@ app.use(
 app.get("/health", async (req, res) => {
   try {
     const dbResult = await pool.query("SELECT NOW()");
-    const cacheStatus = redisClient.isReady ? "connected" : "disconnected";
-
     res.json({
       status: "healthy",
-      timestamp: new Date().toISOString(),
-      services: {
-        database: {
-          status: "connected",
-          timestamp: dbResult.rows[0].now,
-        },
-        cache: {
-          status: cacheStatus,
-          type: "redis",
-        },
-      },
-      environment: {
-        node_version: process.version,
-        platform: process.platform,
-      },
+      cache_enabled: true,
+      cache_connected: redisClient.isReady,
+      database: "connected",
+      timestamp: dbResult.rows[0].now,
     });
   } catch (error) {
-    res.status(500).json({
-      status: "unhealthy",
-      timestamp: new Date().toISOString(),
-      error: error.message,
-      services: {
-        database: { status: "error", message: error.message },
-        cache: { status: redisClient.isReady ? "connected" : "disconnected" },
-      },
-    });
+    res.status(500).json({ status: "unhealthy", error: error.message });
   }
 });
 
 // ============================================
-// DIRECT DATABASE ENDPOINTS (BASELINE)
+// CACHED ENDPOINTS
 // ============================================
 
 /**
- * GET /api/sales/direct/:year/:month
- * แก้ไข: transaction_date แทน order_date
+ * GET /api/sales/cached/:year/:month
+ * Cached Monthly Sales Report
  */
-app.get("/api/sales/direct/:year/:month", async (req, res) => {
+app.get("/api/sales/cached/:year/:month", async (req, res) => {
   const startTime = Date.now();
   const { year, month } = req.params;
-  res.locals.cacheHit = false;
+  const cacheKey = `${CACHE_PREFIX}monthly:${year}:${month}`;
 
   try {
+    // 1. Try to get from cache
+    const cachedData = await getCache(cacheKey);
+
+    if (cachedData) {
+      const queryTime = Date.now() - startTime;
+      res.locals.cacheHit = true;
+      res.locals.queryTime = queryTime;
+
+      return res.json({
+        ...cachedData,
+        metadata: {
+          ...cachedData.metadata,
+          cache_hit: true,
+          query_time_ms: queryTime,
+        },
+      });
+    }
+
+    // 2. Cache miss - query from database
+    res.locals.cacheHit = false;
+
     const query = `
       SELECT 
         DATE_TRUNC('day', transaction_date) as date,
@@ -159,11 +164,12 @@ app.get("/api/sales/direct/:year/:month", async (req, res) => {
     const queryTime = Date.now() - startTime;
     res.locals.queryTime = queryTime;
 
-    res.json({
+    const responseData = {
       success: true,
       metadata: {
-        query_type: "direct_db",
-        cache_enabled: false,
+        query_type: "cached",
+        cache_enabled: true,
+        cache_hit: false,
         year,
         month,
         query_time_ms: queryTime,
@@ -171,9 +177,14 @@ app.get("/api/sales/direct/:year/:month", async (req, res) => {
       },
       summary,
       daily_breakdown: result.rows,
-    });
+    };
+
+    // 3. Store in cache for future requests
+    await setCache(cacheKey, responseData);
+
+    res.json(responseData);
   } catch (error) {
-    console.error("Database query error:", error);
+    console.error("Query error:", error);
     res.status(500).json({
       success: false,
       error: "Internal server error",
@@ -183,15 +194,34 @@ app.get("/api/sales/direct/:year/:month", async (req, res) => {
 });
 
 /**
- * GET /api/sales/direct/top-products/:year/:month
- * แก้ไข: ใช้ product_name แทน product_id, total_amount แทน amount
+ * GET /api/sales/cached/top-products/:year/:month
+ * Cached Top Products
  */
-app.get("/api/sales/direct/top-products/:year/:month", async (req, res) => {
+app.get("/api/sales/cached/top-products/:year/:month", async (req, res) => {
   const startTime = Date.now();
   const { year, month } = req.params;
-  res.locals.cacheHit = false;
+  const cacheKey = `${CACHE_PREFIX}top-products:${year}:${month}`;
 
   try {
+    const cachedData = await getCache(cacheKey);
+
+    if (cachedData) {
+      const queryTime = Date.now() - startTime;
+      res.locals.cacheHit = true;
+      res.locals.queryTime = queryTime;
+
+      return res.json({
+        ...cachedData,
+        metadata: {
+          ...cachedData.metadata,
+          cache_hit: true,
+          query_time_ms: queryTime,
+        },
+      });
+    }
+
+    res.locals.cacheHit = false;
+
     const query = `
       SELECT 
         product_name,
@@ -212,19 +242,24 @@ app.get("/api/sales/direct/top-products/:year/:month", async (req, res) => {
     const queryTime = Date.now() - startTime;
     res.locals.queryTime = queryTime;
 
-    res.json({
+    const responseData = {
       success: true,
       metadata: {
-        query_type: "direct_db",
-        cache_enabled: false,
+        query_type: "cached",
+        cache_enabled: true,
+        cache_hit: false,
         year,
         month,
         query_time_ms: queryTime,
       },
       top_products: result.rows,
-    });
+    };
+
+    await setCache(cacheKey, responseData);
+
+    res.json(responseData);
   } catch (error) {
-    console.error("Database query error:", error);
+    console.error("Query error:", error);
     res.status(500).json({
       success: false,
       error: "Internal server error",
@@ -234,13 +269,13 @@ app.get("/api/sales/direct/top-products/:year/:month", async (req, res) => {
 });
 
 /**
- * GET /api/sales/direct/range
- * แก้ไข: transaction_date, product_name, total_amount
+ * GET /api/sales/cached/range
+ * Cached Date Range Query
  */
-app.get("/api/sales/direct/range", async (req, res) => {
+app.get("/api/sales/cached/range", async (req, res) => {
   const startTime = Date.now();
   const { start_date, end_date, page = 1, limit = 100 } = req.query;
-  res.locals.cacheHit = false;
+  const cacheKey = `${CACHE_PREFIX}range:${start_date}:${end_date}:${page}:${limit}`;
 
   if (!start_date || !end_date) {
     return res.status(400).json({
@@ -250,6 +285,24 @@ app.get("/api/sales/direct/range", async (req, res) => {
   }
 
   try {
+    const cachedData = await getCache(cacheKey);
+
+    if (cachedData) {
+      const queryTime = Date.now() - startTime;
+      res.locals.cacheHit = true;
+      res.locals.queryTime = queryTime;
+
+      return res.json({
+        ...cachedData,
+        metadata: {
+          ...cachedData.metadata,
+          cache_hit: true,
+          query_time_ms: queryTime,
+        },
+      });
+    }
+
+    res.locals.cacheHit = false;
     const offset = (page - 1) * limit;
 
     const query = `
@@ -286,11 +339,12 @@ app.get("/api/sales/direct/range", async (req, res) => {
     const queryTime = Date.now() - startTime;
     res.locals.queryTime = queryTime;
 
-    res.json({
+    const responseData = {
       success: true,
       metadata: {
-        query_type: "direct_db",
-        cache_enabled: false,
+        query_type: "cached",
+        cache_enabled: true,
+        cache_hit: false,
         start_date,
         end_date,
         page: parseInt(page),
@@ -299,9 +353,13 @@ app.get("/api/sales/direct/range", async (req, res) => {
         query_time_ms: queryTime,
       },
       data: salesResult.rows,
-    });
+    };
+
+    await setCache(cacheKey, responseData);
+
+    res.json(responseData);
   } catch (error) {
-    console.error("Database query error:", error);
+    console.error("Query error:", error);
     res.status(500).json({
       success: false,
       error: "Internal server error",
@@ -311,14 +369,33 @@ app.get("/api/sales/direct/range", async (req, res) => {
 });
 
 /**
- * GET /api/sales/direct/stats
- * แก้ไข: ใช้คอลัมน์ที่มีอยู่จริง// src/benchmark.js
+ * GET /api/sales/cached/stats
+ * Cached Overall Statistics
  */
-app.get("/api/sales/direct/stats", async (req, res) => {
+app.get("/api/sales/cached/stats", async (req, res) => {
   const startTime = Date.now();
-  res.locals.cacheHit = false;
+  const cacheKey = `${CACHE_PREFIX}stats`;
 
   try {
+    const cachedData = await getCache(cacheKey);
+
+    if (cachedData) {
+      const queryTime = Date.now() - startTime;
+      res.locals.cacheHit = true;
+      res.locals.queryTime = queryTime;
+
+      return res.json({
+        ...cachedData,
+        metadata: {
+          ...cachedData.metadata,
+          cache_hit: true,
+          query_time_ms: queryTime,
+        },
+      });
+    }
+
+    res.locals.cacheHit = false;
+
     const query = `
       SELECT 
         COUNT(*) as total_transactions,
@@ -329,8 +406,7 @@ app.get("/api/sales/direct/stats", async (req, res) => {
         COUNT(DISTINCT product_name) as unique_products,
         COUNT(DISTINCT customer_id) as unique_customers,
         COUNT(DISTINCT region) as total_regions,
-        SUM(quantity) as total_quantity_sold,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY total_amount) as median_amount
+        SUM(quantity) as total_quantity_sold
       FROM sales
     `;
 
@@ -338,17 +414,22 @@ app.get("/api/sales/direct/stats", async (req, res) => {
     const queryTime = Date.now() - startTime;
     res.locals.queryTime = queryTime;
 
-    res.json({
+    const responseData = {
       success: true,
       metadata: {
-        query_type: "direct_db",
-        cache_enabled: false,
+        query_type: "cached",
+        cache_enabled: true,
+        cache_hit: false,
         query_time_ms: queryTime,
       },
       statistics: result.rows[0],
-    });
+    };
+
+    await setCache(cacheKey, responseData);
+
+    res.json(responseData);
   } catch (error) {
-    console.error("Database query error:", error);
+    console.error("Query error:", error);
     res.status(500).json({
       success: false,
       error: "Internal server error",
@@ -357,33 +438,31 @@ app.get("/api/sales/direct/stats", async (req, res) => {
   }
 });
 
-// ============================================
-// ERROR HANDLING
-// ============================================
+/**
+ * POST /api/cache/invalidate
+ * Manual cache invalidation
+ */
+app.post("/api/cache/invalidate", async (req, res) => {
+  const { key } = req.body;
 
-app.use((err, req, res, next) => {
-  console.error("Unhandled error:", err.stack);
-  res.status(500).json({
-    success: false,
-    error:
-      process.env.NODE_ENV === "production"
-        ? "Internal server error"
-        : err.message,
-  });
-});
-
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    error: "Endpoint not found",
-    available_endpoints: [
-      "GET /health",
-      "GET /api/sales/direct/:year/:month",
-      "GET /api/sales/direct/top-products/:year/:month",
-      "GET /api/sales/direct/range?start_date=&end_date=",
-      "GET /api/sales/direct/stats",
-    ],
-  });
+  try {
+    if (key) {
+      await redisClient.del(`${CACHE_PREFIX}${key}`);
+      res.json({ success: true, message: `Cache invalidated: ${key}` });
+    } else {
+      // Flush all sales cache
+      const keys = await redisClient.keys(`${CACHE_PREFIX}*`);
+      if (keys.length > 0) {
+        await redisClient.del(keys);
+      }
+      res.json({
+        success: true,
+        message: `All cache invalidated (${keys.length} keys)`,
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // ============================================
@@ -392,62 +471,23 @@ app.use((req, res) => {
 
 const startServer = async () => {
   try {
-    const dbTest = await pool.query("SELECT 1");
-    console.log("✅ PostgreSQL connected successfully");
-
-    await connectRedis();
+    await redisClient.connect();
+    await pool.query("SELECT 1");
 
     app.listen(PORT, () => {
       console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-      console.log(`🚀 Baseline API Server Ready`);
-      console.log(`📍 Port: ${PORT}`);
+      console.log(`🚀 Cached API Server Ready on port ${PORT}`);
       console.log(
-        `🗄️  Database: PostgreSQL (${process.env.PGHOST}:${process.env.PGPORT})`,
+        `💾 Redis Cache: ${redisClient.isReady ? "✅ Connected" : "❌ Failed"}`,
       );
-      console.log(
-        `💾 Cache: Redis (${redisClient.isReady ? "✅ Connected" : "⚠️  Not Connected"})`,
-      );
-      console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-      console.log("📊 Test Endpoints:");
-      console.log(`   curl http://localhost:${PORT}/health`);
-      console.log(`   curl http://localhost:${PORT}/api/sales/direct/2023/6`);
-      console.log(
-        `   curl http://localhost:${PORT}/api/sales/direct/top-products/2023/6`,
-      );
-      console.log(
-        `   curl "http://localhost:${PORT}/api/sales/direct/range?start_date=2023-06-01&end_date=2023-06-30"`,
-      );
-      console.log(`   curl http://localhost:${PORT}/api/sales/direct/stats`);
+      console.log(`⏱️  Cache TTL: ${CACHE_TTL}s`);
       console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     });
   } catch (error) {
-    console.error("❌ Failed to start server:", error.message);
+    console.error("❌ Failed to start:", error.message);
     process.exit(1);
   }
 };
-
-const shutdown = async (signal) => {
-  console.log(`\n📥 ${signal} received. Starting graceful shutdown...`);
-
-  try {
-    if (redisClient.isReady) {
-      await redisClient.quit();
-      console.log("💾 Redis connection closed");
-    }
-
-    await pool.end();
-    console.log("🗄️  PostgreSQL pool closed");
-
-    console.log("👋 Graceful shutdown complete");
-    process.exit(0);
-  } catch (error) {
-    console.error("❌ Error during shutdown:", error);
-    process.exit(1);
-  }
-};
-
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
 
 startServer();
 
