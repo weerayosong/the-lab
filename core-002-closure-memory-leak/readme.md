@@ -1,7 +1,138 @@
-# core-002: Closure Memory Leak Detective
+# core-002: Closure Memory Leak Detective 🧪
 
-## Overview
+Status: [COMPLETED]
+Category: Core
+Tag: WeakMap Garbage Collector
+Last Updated: กรกฎาคม 2026
+
+## Hypothesis
 
 Closure ใน JavaScript กัก reference ของ outer scope ทั้งหมด
 แม้จะใช้แค่บางส่วน ทำให้ GC ไม่สามารถเก็บ object ใหญ่ๆ ได้
 → heap ค่อยๆ โตจน Single Page App crash หลังจากเปิด tab นานๆ
+
+## 🔬 Experiment Design
+
+### 3 Scenarios
+
+| #   | Scenario     | Pattern                                  | Expected           |
+| --- | ------------ | ---------------------------------------- | ------------------ |
+| 1   | **Baseline** | WeakMap + release refs                   | ✅ GC frees memory |
+| 2   | **The Leak** | EventEmitter + Closure holding large obj | ❌ Memory leaked   |
+| 3   | **The Fix**  | WeakMap + unsubscribe + param passing    | ✅ GC frees memory |
+
+### What We Measure
+
+- `process.memoryUsage().heapUsed` (in MB)
+- Before → After Create → After Release → After `global.gc()`
+
+## 🚀 Quick Start
+
+```bash
+# Run once, see all 3 scenarios + summary table
+bash run.sh
+
+# Or directly
+node --expose-gc detective.js
+```
+
+## 📊 Sample Output
+
+```
+╔══════════════════════════════════════════════════════════╗
+║               📊 BENCHMARK SUMMARY                       ║
+╠══════════════════════════════════════════════════════════╣
+║ Scenario              │ Heap After GC │ Freed │ Leak?    ║
+╟───────────────────────┼───────────────┼───────┼──────────╢
+║ 📦 Baseline (WeakMap) │     4.5 MB    │ 10.0 MB │ ✅ NO  ║
+║ 🔴 Closure Leak       │    45.5 MB    │  0.3 MB │ ❌ YES ║
+║ 🟢 WeakMap + Cleanup  │     4.6 MB    │  9.9 MB │ ✅ NO  ║
+╚══════════════════════════════════════════════════════════╝
+```
+
+## 🧠 How It Works
+
+### The Leak (Scenario 2)
+
+```
+emitter (global/long-lived)
+  └─> _listeners Map
+        └─> Set of callbacks
+              └─> callback function
+                    └─> [[Scope]] (closure)
+                          └─> bigObject (1KB) ← TRAPPED!
+```
+
+แม้เราจะปล่อย `bigObjects = []` แล้ว แต่ emitter ยังมี path ไปถึงทุก bigObject ผ่าน closure ของ callback → GC เก็บไม่ได้
+
+### The Fix (Scenario 3)
+
+```
+emitter
+  └─> callback (รับ obj ผ่าน parameter — ไม่มี bigObject ใน closure)
+        └─> WeakMap.get(obj) → metadata (weak ref — GC เก็บได้)
+```
+
+หลัง unsubscribe + release items → ไม่มี reference ใดเหลือ → GC เก็บทั้งหมด
+
+## 🏢 Business Value — Production Impact
+
+### Real Bug ที่เจอจริง
+
+- **React SPA**: `useEffect` ที่ subscribe event bus แต่ลืม return cleanup function → เปิด tab 2-3 ชม. ใช้ RAM 1-2 GB แล้ว crash
+- **Node.js WebSocket server**: client disconnect แต่ listener ใน global emitter ไม่เคยถูกลบ → memory leak สะสม → OOM kill ทุก 2 วัน
+- **Real-time Dashboard**: เปิดทิ้งไว้ข้ามคืน → browser tab crash เพราะทุก data update เพิ่ม closure เข้า emitter
+
+### Prevention Checklist
+
+- [ ] ทุก `.on()` / `.addEventListener()` ต้องมี `.off()` / `.removeEventListener()` คู่กัน
+- [ ] ใน React: `useEffect` return cleanup function เสมอ
+- [ ] ใช้ WeakMap สำหรับ metadata ที่ผูกกับ object lifecycle
+- [ ] ส่งข้อมูลผ่าน function parameter แทนการอ้างอิงผ่าน closure
+- [ ] Profiling ด้วย Chrome DevTools Memory tab หรือ `node --inspect` เป็นระยะ
+
+## 🔧 Tech Stack
+
+- **Runtime**: Node.js 18+
+- **Dependencies**: Zero (stdlib only)
+- **Key APIs**: `process.memoryUsage()`, `global.gc()`, `WeakMap`, `Buffer.alloc()`
+
+## 📝 Status
+
+✅ Complete — All 3 phases done
+
+---
+
+## 👶 ELI5 (Explain Like I'm 5)
+
+ลองนึกภาพว่าคุณมีของเล่น 🧸 และกล่องเก็บของเล่น 📦
+
+**Closure ก็เหมือนการที่คุณเอาเชือกผูกของเล่นไว้กับตัวเอง**
+
+- คุณมีตุ๊กตาหมีตัวใหญ่ 🧸
+- คุณผูกเชือกจากตุ๊กตาไว้ที่ข้อมือคุณ
+- แม้คุณจะวางตุ๊กตาลงบนพื้น (release reference)
+- **แต่เชือกยังอยู่!** → คุณก็ยังลากตุ๊กตาไปไหนมาไหนด้วยอยู่ดี
+- แม่ (Garbage Collector) จะมาเก็บของเล่นไปไม่ได้ เพราะเห็นว่าคุณยังมีเชือกผูกลากตุ๊กตาอยู่
+
+**WeakMap ก็เหมือนกระดาษโพสต์อิท 📝**
+
+- คุณแปะโน้ตบนตุ๊กตาหมี (metadata) โดยไม่ต้องผูกเชือก
+- เมื่อคุณวางตุ๊กตาลงและเดินจากไป (release reference)
+- แม่เห็นว่าตุ๊กตาไม่มีใครเล่นแล้ว → เก็บลงกล่องเก็บได้เลย
+- โพสต์อิทก็หายไปพร้อมตุ๊กตา ไม่ทิ้งขยะไว้
+
+### สิ่งที่เราเรียนรู้
+
+1. **อย่าผูกเชือกถ้าไม่จำเป็น** — ใช้ WeakMap แทน closure สำหรับ metadata
+2. **แกะเชือกทุกครั้งเมื่อเลิกเล่น** — unsubscribe event listener เสมอ
+3. **ให้ของเล่นผ่านมือ** (parameter) — ดีกว่าให้เด็กวิ่งไปหยิบเอง (closure)
+
+---
+
+## 📚 References
+
+- [MDN: Closures](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Closures)
+- [MDN: WeakMap](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/WeakMap)
+- [V8 Blog: Memory Management](https://v8.dev/blog)
+- [Node.js: --expose-gc](https://nodejs.org/api/cli.html#--expose-gc)
