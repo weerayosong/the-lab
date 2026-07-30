@@ -164,12 +164,6 @@ function scenarioTheFix(COUNT = 10_000) {
         meta.cachedAt = Date.now();
       }
     });
-
-    return {
-      afterGC: parseFloat(afterGC),
-      freed: parseFloat((afterCreate - afterGC).toFixed(1)),
-      stillHeld: parseFloat((afterGC - before).toFixed(1)),
-    };
   }
 
   const afterCreate = heapUsedMB();
@@ -199,6 +193,12 @@ function scenarioTheFix(COUNT = 10_000) {
     "     2. ใช้ WeakMap เก็บ metadata — GC เก็บได้เมื่อ object ถูกปล่อย",
   );
   console.log("     3. unsubscribe listeners เมื่อไม่ใช้แล้ว\n");
+
+  return {
+    afterGC: parseFloat(afterGC),
+    freed: parseFloat((afterCreate - afterGC).toFixed(1)),
+    stillHeld: parseFloat((afterGC - before).toFixed(1)),
+  };
 }
 
 // ---- Summary Table ----
