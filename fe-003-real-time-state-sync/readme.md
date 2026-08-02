@@ -1,8 +1,8 @@
 # fe-003: Real-time State Synchronization & Collaborative System
 
-**Status:** [On going]  
-**Category:** WebSocket / Real-time Systems  
-**Tag:** `Architecture` `State Management` `Collaborative`  
+**Status:** [COMPLETED]  
+**Category:** Frontend
+**Tag:** `WebSocket` `Real-time Systems ` `Architecture` `State Management` `Collaborative`  
 **Last Updated:** สิงหาคม 2026
 
 โปรเจกต์นี้เป็นห้องปฏิบัติการ (Lab) สำหรับศึกษาและทดลองระบบ Synchronize State แบบ Real-time ระหว่างหลาย Clients ผ่านเทคโนโลยี BroadcastChannel API (WebSocket Abstraction) โดยใช้แนวคิดพื้นฐานเดียวกับ Google Docs, Figma และ Notion ในการแชร์สถานะร่วมกัน แก้ปัญหา Conflict และทำ Optimistic UI Updates
