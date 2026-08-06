@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="th">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Phase 1: Naive Render 100K Rows</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script>
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        colors: {
+                            primary: "#3b82f6",
+                            surface: "#1e293b",
+                            border: "#334155",
+                        },
+                    },
+                },
+            };
+        </script>
+    </head>
+    <body class="bg-red-950 text-slate-100 min-h-screen font-mono">
+        <!-- Header -->
+        <header
+            class="bg-red-900 border-b border-red-800 px-6 py-4 sticky top-0 z-10"
+        >
+            <div class="max-w-6xl mx-auto flex items-center justify-between">
+                <div>
+                    <h1 class="text-xl font-bold text-red-400">
+                        🔴 Phase 1: Naive Direct DOM (⚠️ ระวังคอมค้าง โหลด DOM
+                        หนักมาก)
+                    </h1>
+                    <p class="text-xs text-red-300 mt-0.5">
+                        100,000 rows — No Virtualization
+                    </p>
+                </div>
+                <div class="flex gap-6 text-sm">
+                    <div class="text-right">
+                        <p class="text-slate-400">แถวทั้งหมด</p>
+                        <p id="totalRows" class="font-bold text-lg">100,000</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-slate-400">DOM Nodes</p>
+                        <p
+                            id="domCount"
+                            class="font-bold text-lg text-yellow-400"
+                        >
+                            -
+                        </p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-slate-400">FPS</p>
+                        <p
+                            id="fpsCounter"
+                            class="font-bold text-lg text-red-400"
+                        >
+                            -
+                        </p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-slate-400">RenderTime</p>
+                        <p
+                            id="renderTime"
+                            class="font-bold text-lg text-orange-400"
+                        >
+                            -
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Table -->
+        <main class="max-w-6xl mx-auto p-6">
+            <div
+                class="bg-slate-900 rounded-lg border border-red-800 overflow-hidden"
+            >
+                <!-- Table Header -->
+                <div
+                    class="grid grid-cols-5 gap-4 px-6 py-3 bg-slate-800 text-xs font-semibold uppercase tracking-wider text-slate-300 border-b border-slate-700 sticky top-0"
+                >
+                    <div>#</div>
+                    <div>ชื่อ</div>
+                    <div>อีเมล</div>
+                    <div>ยอดเงิน</div>
+                    <div>สถานะ</div>
+                </div>
+
+                <!-- Scrollable Body -->
+                <div
+                    id="tableBody"
+                    class="overflow-y-auto"
+                    style="height: 600px"
+                >
+                    <!-- Dynamic rows -->
+                </div>
+            </div>
+        </main>
+
+        <script>
+            // ============================================================
+            // Phase 1: Naive Direct DOM Rendering — 100,000 DOM Elements
+            // ============================================================
+
+            const TOTAL_ROWS = 100_000;
+            const TABLE_BODY = document.getElementById("tableBody");
+            const DOM_COUNT_EL = document.getElementById("domCount");
+            const FPS_EL = document.getElementById("fpsCounter");
+            const RENDER_TIME_EL = document.getElementById("renderTime");
+
+            // ---------- Data Generator ----------
+            function generateData(count) {
+                const firstNames = [
+                    "สมแมว",
+                    "สมเหมียว",
+                    "สมโฮ่ง",
+                    "สมบ๊อกบ๊อก",
+                    "สมอ๋อง",
+                    "สมแอ๋ง",
+                    "สมใจ",
+                    "สมถวิล",
+                    "สมบูรณ์",
+                    "สมศรี",
+                ];
+                const lastNames = [
+                    "เมตตา",
+                    "รุ่งเรือง",
+                    "สุขสบาย",
+                    "มั่งมี",
+                    "ศรีสุข",
+                    "อบอุ่น",
+                    "ทำบุญ",
+                    "ยินดี",
+                    "จริงใจ",
+                    "เผื่อแผ่",
+                ];
+                const statuses = ["active", "inactive", "pending"];
+
+                const data = [];
+                for (let i = 0; i < count; i++) {
+                    data.push({
+                        id: i + 1,
+                        name: `${firstNames[i % 10]} ${lastNames[Math.floor(i / 10) % 10]}`,
+                        email: `user${i + 1}@example.com`,
+                        balance: (Math.random() * 9000000).toFixed(2),
+                        status: statuses[i % 3],
+                    });
+                }
+                return data;
+            }
+
+            // ---------- FPS Counter ----------
+            let frameCount = 0;
+            let lastTime = performance.now();
+
+            function updateFPS() {
+                frameCount++;
+                const now = performance.now();
+                if (now - lastTime >= 1000) {
+                    FPS_EL.textContent = frameCount;
+                    frameCount = 0;
+                    lastTime = now;
+                }
+                requestAnimationFrame(updateFPS);
+            }
+
+            // ---------- Naive Render (สร้าง DOM ทั้งหมด) ----------
+            function renderAllRows(data) {
+                const startTime = performance.now();
+                TABLE_BODY.innerHTML = ""; // Clear
+
+                // ใช้ DocumentFragment เพื่อลด Reflow (แต่ก็ยังหนักอยู่ดี)
+                const fragment = document.createDocumentFragment();
+
+                for (const row of data) {
+                    const rowDiv = document.createElement("div");
+                    rowDiv.className =
+                        "grid grid-cols-5 gap-4 px-6 py-3 border-b border-slate-800 hover:bg-slate-800/50 transition-colors text-sm";
+
+                    const statusColor =
+                        row.status === "active"
+                            ? "text-green-400"
+                            : row.status === "inactive"
+                              ? "text-red-400"
+                              : "text-yellow-400";
+
+                    rowDiv.innerHTML = `
+          <div class="text-slate-500">${row.id.toLocaleString()}</div>
+          <div>${row.name}</div>
+          <div class="text-slate-400">${row.email}</div>
+          <div class="text-right tabular-nums">${Number(row.balance).toLocaleString()} ฿</div>
+          <div class="${statusColor} font-medium">${row.status}</div>
+        `;
+                    fragment.appendChild(rowDiv);
+                }
+
+                TABLE_BODY.appendChild(fragment);
+                const endTime = performance.now();
+                const duration = (endTime - startTime).toFixed(0);
+
+                RENDER_TIME_EL.textContent = `${duration} ms`;
+                DOM_COUNT_EL.textContent = document
+                    .querySelectorAll("#tableBody > div")
+                    .length.toLocaleString();
+
+                console.log(`⏱️ Render Time: ${duration} ms`);
+                console.log(`📦 DOM Nodes:  ${TOTAL_ROWS.toLocaleString()}`);
+                console.log(`⚠️ Memory Heavy! ลอง scroll ดูความกระตุก`);
+            }
+
+            // ---------- Init ----------
+            console.log(`🔴 PHASE 1: Naive Direct DOM Rendering`);
+            console.log(`📊 Generating ${TOTAL_ROWS.toLocaleString()} rows...`);
+            const mockData = generateData(TOTAL_ROWS);
+            console.log("✅ Data generated!");
+
+            document.getElementById("totalRows").textContent =
+                TOTAL_ROWS.toLocaleString();
+
+            console.log("🎨 Rendering ALL rows to DOM...");
+            renderAllRows(mockData);
+            console.log("✅ Render complete!");
+            console.log("💡 Hint: ลอง scroll เร็วๆ แล้วดู FPS ตก");
+
+            updateFPS();
+        </script>
+    </body>
+</html>
