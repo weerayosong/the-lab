@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DOM Virtual Scroll</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .iframe-container {
+        height: calc(100vh - 180px);
+        min-height: 500px;
+      }
+      iframe {
+        border-radius: 0.5rem;
+      }
+    </style>
+  </head>
+  <body class="bg-slate-950 text-slate-100 min-h-screen font-mono">
+    <!-- Header -->
+    <header class="bg-slate-900 border-b border-slate-800 px-6 py-4">
+      <div class="max-w-full mx-auto flex items-center justify-between">
+        <div>
+          <h1 class="text-xl font-bold text-blue-400">Benchmark Dashboard</h1>
+          <p class="text-xs text-slate-400 mt-0.5">
+            Side-by-Side Comparison — Naive DOM vs Virtual Scroll
+          </p>
+        </div>
+        <div class="flex gap-3 items-center">
+          <!-- ปุ่ม Toggle Naive -->
+          <button
+            id="toggleNaive"
+            class="bg-slate-700/50 border border-slate-600 text-slate-400 hover:bg-slate-600/50 px-4 py-1.5 rounded text-xs font-semibold transition-colors cursor-pointer"
+          >
+            🟢 เปิดฝั่ง Naive
+          </button>
+          <div class="flex gap-4 text-xs">
+            <div
+              class="bg-red-900/50 border border-red-800 rounded px-3 py-1.5 text-red-300"
+            >
+              🔴 Naive: <span id="naiveNodes" class="font-bold">-</span> DOM
+              Nodes
+            </div>
+            <div
+              class="bg-green-900/50 border border-green-800 rounded px-3 py-1.5 text-green-300"
+            >
+              🟢 Virtual: <span id="virtualNodes" class="font-bold">-</span> DOM
+              Nodes
+            </div>
+            <div
+              class="bg-blue-900/50 border border-blue-800 rounded px-3 py-1.5 text-blue-300"
+            >
+              ⚡ Improvement:
+              <span id="improvement" class="font-bold text-lg">~3,333x</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Comparison Grid -->
+    <main class="grid grid-cols-2 gap-4 p-4 iframe-container" id="mainGrid">
+      <!-- Left: Naive -->
+      <div
+        id="naivePanel"
+        style="display: none"
+        class="bg-slate-900 rounded-lg border border-red-800 overflow-hidden flex flex-col"
+      >
+        <div
+          class="bg-red-900/30 px-4 py-2 border-b border-red-800 text-sm font-semibold text-red-400 flex items-center gap-2"
+        >
+          <span>🔴</span> Phase 1: Naive Direct DOM
+          <span class="text-xs text-red-300 font-normal ml-auto"
+            >100k elements — Laggy Scroll</span
+          >
+        </div>
+        <iframe
+          id="naiveFrame"
+          src="phase1-naive.html"
+          class="flex-1 w-full border-0"
+          title="Naive Render"
+        ></iframe>
+      </div>
+
+      <!-- Right: Virtual -->
+      <div
+        id="virtualPanel"
+        class="bg-slate-900 rounded-lg border border-green-800 overflow-hidden flex flex-col"
+      >
+        <div
+          class="bg-green-900/30 px-4 py-2 border-b border-green-800 text-sm font-semibold text-green-400 flex items-center gap-2"
+        >
+          <span>🟢</span> Phase 2: Virtual Scroll + DOM Recycling
+          <span class="text-xs text-green-300 font-normal ml-auto"
+            >~30 elements — 60fps Smooth</span
+          >
+        </div>
+        <iframe
+          src="phase2-virtual.html"
+          class="flex-1 w-full border-0"
+          title="Virtual Scroll"
+        ></iframe>
+      </div>
+    </main>
+
+    <!-- Footer Stats -->
+    <footer class="bg-slate-900 border-t border-slate-800 px-6 py-3">
+      <div
+        class="max-w-full mx-auto flex items-center justify-between text-xs text-slate-500"
+      >
+        <div>
+          <span class="text-slate-400 font-semibold">fe-004</span> — Total Data:
+          <span class="text-white">100,000 rows</span> × 5 columns =
+          <span class="text-white">500,000 cells</span>
+        </div>
+        <div class="flex gap-6">
+          <span
+            >🔴 Naive Render:
+            <span class="text-red-400">Memory Heavy</span></span
+          >
+          <span
+            >🟢 Virtual Scroll:
+            <span class="text-green-400">High Performance</span></span
+          >
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      // ---------- Toggle Naive Panel ----------
+      const toggleBtn = document.getElementById("toggleNaive");
+      const naivePanel = document.getElementById("naivePanel");
+      const mainGrid = document.getElementById("mainGrid");
+
+      let naiveVisible = false;
+
+      toggleBtn.addEventListener("click", () => {
+        naiveVisible = !naiveVisible;
+
+        if (naiveVisible) {
+          // แสดงฝั่ง Naive
+          naivePanel.style.display = "flex";
+          mainGrid.className = "grid grid-cols-2 gap-4 p-4 iframe-container";
+          toggleBtn.textContent = "🔴 ปิดฝั่ง Naive";
+          toggleBtn.className =
+            "bg-slate-900/50 border border-slate-600 text-slate-400 hover:bg-slate-800/50 px-4 py-1.5 rounded text-xs font-semibold transition-colors cursor-pointer";
+        } else {
+          // ซ่อนฝั่ง Naive — Virtual กินเต็มจอ
+          naivePanel.style.display = "none";
+          mainGrid.className = "grid grid-cols-1 gap-4 p-4 iframe-container";
+          toggleBtn.textContent = "🟢 เปิดฝั่ง Naive";
+          toggleBtn.className =
+            "bg-slate-700/50 border border-slate-600 text-slate-400 hover:bg-slate-600/50 px-4 py-1.5 rounded text-xs font-semibold transition-colors cursor-pointer";
+        }
+      });
+
+      // ---------- Stats ----------
+      const naiveNodes = 100000;
+      const virtualNodes = 30;
+      const improvement = (naiveNodes / virtualNodes).toLocaleString();
+
+      document.getElementById("naiveNodes").textContent =
+        naiveNodes.toLocaleString();
+      document.getElementById("virtualNodes").textContent = `~${virtualNodes}`;
+      document.getElementById("improvement").textContent =
+        `~${improvement}x fewer nodes`;
+    </script>
+  </body>
+</html>
