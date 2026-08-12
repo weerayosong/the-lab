@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>core-005-api-gateway</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f5f7fa;color:#1a1a2e;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .container{background:#ffffff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08),0 4px 12px rgba(0,0,0,0.05);padding:2rem;max-width:820px;width:100%}
+  .header{border-bottom:1px solid #e8ecf1;padding-bottom:1.25rem;margin-bottom:1.5rem}
+  .header h1{font-size:1.25rem;font-weight:600;letter-spacing:-0.2px;color:#1a1a2e}
+  .header .sub{font-size:0.8rem;color:#6b7a8f;font-weight:400;margin-top:4px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem}
+  .panel{background:#f8fafc;border:1px solid #e8ecf1;border-radius:8px;padding:1.25rem}
+  .panel h3{font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;color:#6b7a8f;font-weight:600;margin-bottom:0.75rem}
+  .stat-group{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .stat-number{font-size:1.75rem;font-weight:600;color:#1a1a2e;font-feature-settings:"tnum"}
+  .stat-label{font-size:0.75rem;color:#6b7a8f}
+  .badge{display:inline-block;font-size:0.65rem;font-weight:600;padding:2px 12px;border-radius:12px;background:#e8ecf1;color:#4a5a6e;border:1px solid #dce1e8}
+  .badge.ready{background:#e6f4ea;color:#1e7e34;border-color:#b7e0c5}
+  .badge.limited{background:#fce8e6;color:#b3261e;border-color:#f5c6c2}
+  .flex-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .flex-row input{flex:1;min-width:140px;padding:8px 12px;border:1px solid #dce1e8;border-radius:6px;font-size:0.8rem;font-family:monospace;background:#ffffff;color:#1a1a2e}
+  .flex-row input:focus{outline:2px solid #b3c4d4;border-color:transparent}
+  button{background:#f0f2f5;border:1px solid #dce1e8;color:#1a1a2e;padding:8px 18px;border-radius:6px;font-size:0.8rem;font-weight:500;cursor:pointer;transition:all 0.15s;font-family:inherit}
+  button:hover{background:#e5e8ed;border-color:#b3c4d4}
+  button:active{transform:scale(0.97)}
+  button.primary{background:#1a1a2e;color:#ffffff;border-color:#1a1a2e}
+  button.primary:hover{background:#2d2d4a}
+  button.danger{color:#b3261e;border-color:#f5c6c2}
+  button.danger:hover{background:#fce8e6}
+  .response-display{font-size:0.8rem;color:#4a5a6e;margin-top:6px;font-family:monospace;padding:4px 0}
+  .log-box{background:#ffffff;border:1px solid #e8ecf1;border-radius:6px;padding:0.75rem;height:110px;overflow-y:auto;font-size:0.75rem;font-family:monospace;color:#2d3a4a;margin-top:6px}
+  .log-box div{padding:4px 0;border-bottom:1px solid #f0f2f5}
+  .log-box .error{color:#b3261e}
+  .log-box .success{color:#1e7e34}
+  .log-box .muted{color:#8a9aa8}
+  .footer{margin-top:1.5rem;padding-top:1rem;border-top:1px solid #e8ecf1;display:flex;gap:1.5rem;flex-wrap:wrap;font-size:0.7rem;color:#6b7a8f}
+  .footer span{display:flex;align-items:center;gap:4px}
+  .footer .value{color:#1a1a2e;font-weight:500;font-feature-settings:"tnum"}
+  @media(max-width:600px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>core-005-api-gateway</h1>
+    <div class="sub">rate limiter · event bus · webhook simulator</div>
+  </div>
+
+  <div class="grid">
+    <!-- LEFT: API Gateway Panel -->
+    <div class="panel">
+      <h3>API Gateway · Rate Limited</h3>
+      <div class="stat-group">
+        <span class="stat-number" id="counter">0</span>
+        <span class="stat-label">/ 5 requests per minute</span>
+        <span class="badge" id="statusBadge">ready</span>
+      </div>
+      <div style="margin-top:6px;font-size:0.7rem;color:#6b7a8f">
+        reset in <span id="timer" style="font-weight:500;color:#1a1a2e">60</span>s
+      </div>
+      <div class="flex-row">
+        <input type="text" id="payloadInput" placeholder='{"action":"ping"}' value='{"action":"ping"}'>
+        <button class="primary" id="callBtn">Call</button>
+      </div>
+      <div class="response-display">
+        response: <span id="responseDisplay">—</span>
+      </div>
+    </div>
+
+    <!-- RIGHT: Webhook Simulator -->
+    <div class="panel">
+      <h3>Webhook Simulator · Event Bus</h3>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+        <button id="emitEventBtn">Emit Event</button>
+        <button id="clearLogBtn" class="danger">Clear</button>
+      </div>
+      <div class="log-box" id="logBox">
+        <div class="muted">waiting for events</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer: System Stats -->
+  <div class="footer">
+    <span>event loop: <span class="value" id="eventLoopStatus">idle</span></span>
+    <span>queue: <span class="value" id="queueSize">0</span></span>
+    <span>latency: <span class="value" id="latencyDisplay">0</span>ms</span>
+    
+  </div>
+</div>
+
+<script>
+// ============================================================
+// core-005-api-gateway · Rate Limiter + Event Bus + Webhook Sim
+// ============================================================
+
+// ---- Rate Limiter (Sliding Window) ----
+class RateLimiter {
+  constructor(limit = 5, windowMs = 60000) {
+    this.limit = limit;
+    this.windowMs = windowMs;
+    this.requests = [];
+  }
+
+  allow() {
+    const now = Date.now();
+    this.requests = this.requests.filter(t => now - t < this.windowMs);
+    if (this.requests.length < this.limit) {
+      this.requests.push(now);
+      return true;
+    }
+    return false;
+  }
+
+  get remaining() {
+    const now = Date.now();
+    this.requests = this.requests.filter(t => now - t < this.windowMs);
+    return Math.max(0, this.limit - this.requests.length);
+  }
+
+  get resetIn() {
+    if (this.requests.length === 0) return 0;
+    const now = Date.now();
+    const oldest = this.requests[0];
+    return Math.max(0, Math.ceil((oldest + this.windowMs - now) / 1000));
+  }
+}
+
+// ---- Event Bus (Pub/Sub) ----
+class EventBus {
+  constructor() {
+    this.listeners = new Map();
+    this.queue = [];
+    this.processing = false;
+  }
+
+  on(event, callback) {
+    if (!this.listeners.has(event)) this.listeners.set(event, []);
+    this.listeners.get(event).push(callback);
+  }
+
+  emit(event, data) {
+    this.queue.push({ event, data, timestamp: Date.now() });
+    this.processQueue();
+  }
+
+  async processQueue() {
+    if (this.processing || this.queue.length === 0) return;
+    this.processing = true;
+    document.getElementById('eventLoopStatus').textContent = 'processing';
+
+    while (this.queue.length > 0) {
+      const item = this.queue.shift();
+      const callbacks = this.listeners.get(item.event) || [];
+      for (const cb of callbacks) {
+        try {
+          await cb(item.data);
+        } catch (err) {
+          console.error('webhook error:', err);
+        }
+      }
+      document.getElementById('queueSize').textContent = this.queue.length;
+      await new Promise(r => setTimeout(r, 40 + Math.random() * 80));
+    }
+
+    this.processing = false;
+    document.getElementById('eventLoopStatus').textContent = 'idle';
+  }
+
+  get queueSize() { return this.queue.length; }
+}
+
+// ---- Instances ----
+const limiter = new RateLimiter(5, 60000);
+const bus = new EventBus();
+
+// ---- DOM Refs ----
+const counterEl = document.getElementById('counter');
+const timerEl = document.getElementById('timer');
+const statusBadge = document.getElementById('statusBadge');
+const responseDisplay = document.getElementById('responseDisplay');
+const payloadInput = document.getElementById('payloadInput');
+const callBtn = document.getElementById('callBtn');
+const logBox = document.getElementById('logBox');
+const emitBtn = document.getElementById('emitEventBtn');
+const clearLogBtn = document.getElementById('clearLogBtn');
+const latencyDisplay = document.getElementById('latencyDisplay');
+const queueSizeEl = document.getElementById('queueSize');
+
+// ---- Webhook Handlers ----
+bus.on('api.call', (data) => {
+  addLog(`api called: ${JSON.stringify(data)}`, 'success');
+});
+
+bus.on('system.ping', (data) => {
+  addLog(`pong (${data.timestamp})`, '');
+});
+
+bus.on('webhook.test', (data) => {
+  addLog(`webhook triggered: ${data.message || 'no message'}`, '');
+});
+
+bus.on('webhook.endpoint', async (data) => {
+  const start = Date.now();
+  await new Promise(r => setTimeout(r, 80 + Math.random() * 150));
+  const latency = Date.now() - start;
+  latencyDisplay.textContent = latency;
+  addLog(`webhook processed (${latency}ms)`, 'success');
+});
+
+// ---- UI Helpers ----
+function addLog(msg, type = '') {
+  const div = document.createElement('div');
+  const time = new Date().toLocaleTimeString('en-GB', { hour12: false });
+  div.textContent = `[${time}] ${msg}`;
+  if (type === 'error') div.className = 'error';
+  if (type === 'success') div.className = 'success';
+  logBox.appendChild(div);
+  logBox.scrollTop = logBox.scrollHeight;
+  while (logBox.children.length > 50) {
+    logBox.removeChild(logBox.firstChild);
+  }
+}
+
+function updateUI() {
+  const remaining = limiter.remaining;
+  counterEl.textContent = remaining;
+  timerEl.textContent = limiter.resetIn;
+
+  if (remaining > 0) {
+    statusBadge.textContent = 'ready';
+    statusBadge.className = 'badge ready';
+  } else {
+    statusBadge.textContent = 'limited';
+    statusBadge.className = 'badge limited';
+  }
+
+  queueSizeEl.textContent = bus.queueSize;
+}
+
+// ---- Core: API Call ----
+function callAPI() {
+  const start = Date.now();
+
+  if (!limiter.allow()) {
+    responseDisplay.textContent = 'rate limit exceeded';
+    addLog('rate limit exceeded', 'error');
+    updateUI();
+    return;
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(payloadInput.value || '{"action":"ping"}');
+  } catch {
+    responseDisplay.textContent = 'invalid JSON';
+    addLog('invalid JSON payload', 'error');
+    return;
+  }
+
+  setTimeout(() => {
+    const latency = Date.now() - start;
+    latencyDisplay.textContent = latency;
+    bus.emit('api.call', { ...payload, latency });
+    responseDisplay.textContent = `ok (${latency}ms)`;
+    addLog(`api responded (${latency}ms)`, 'success');
+    updateUI();
+  }, 40 + Math.random() * 120);
+
+  updateUI();
+}
+
+// ---- Event Emitter ----
+function emitTestEvent() {
+  const data = {
+    message: `test-${Math.floor(Math.random() * 1000)}`,
+    timestamp: Date.now()
+  };
+  bus.emit('webhook.endpoint', data);
+  bus.emit('webhook.test', data);
+  addLog(`emitted: ${data.message}`, '');
+  updateUI();
+}
+
+// ---- Clear Log ----
+function clearLog() {
+  logBox.innerHTML = '<div class="muted">log cleared</div>';
+}
+
+// ---- Timer Loop ----
+setInterval(updateUI, 1000);
+
+// ---- Event Bindings ----
+callBtn.addEventListener('click', callAPI);
+emitBtn.addEventListener('click', emitTestEvent);
+clearLogBtn.addEventListener('click', clearLog);
+
+payloadInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') callAPI();
+});
+
+// ---- Auto Demo ----
+setTimeout(() => {
+  callAPI();
+  setTimeout(emitTestEvent, 300);
+  setTimeout(emitTestEvent, 700);
+}, 400);
+
+// ---- Init ----
+updateUI();
+addLog('core-005-api-gateway initialized', 'success');
+addLog('rate limit: 5 req/min', '');
+</script>
+</body>
+</html>
